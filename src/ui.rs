@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -7,6 +8,19 @@ use ratatui::{
 };
 use crate::app::App;
 use crate::git::CommitDetails;
+
+const COMMIT_COLORS: &[Color] = &[
+    Color::Cyan,
+    Color::LightGreen,
+    Color::Yellow,
+    Color::LightMagenta,
+    Color::LightBlue,
+    Color::LightRed,
+    Color::LightCyan,
+    Color::Green,
+    Color::LightYellow,
+    Color::Magenta,
+];
 
 pub fn ui(f: &mut Frame, app: &App) {
     let chunks = Layout::default()
@@ -32,6 +46,13 @@ pub fn ui(f: &mut Frame, app: &App) {
     let visible_height = chunks[1].height.saturating_sub(2) as usize;
     let end_idx = (app.scroll_offset + visible_height).min(app.lines.len());
 
+    // Assign a stable color to each unique commit (by order of first appearance)
+    let mut commit_color_map: HashMap<&str, usize> = HashMap::new();
+    for line in &app.lines {
+        let next = commit_color_map.len();
+        commit_color_map.entry(line.full_commit_id.as_str()).or_insert(next);
+    }
+
     let items: Vec<ListItem> = app.lines[app.scroll_offset..end_idx]
         .iter()
         .enumerate()
@@ -39,17 +60,20 @@ pub fn ui(f: &mut Frame, app: &App) {
             let actual_line_idx = app.scroll_offset + idx;
             let is_selected = actual_line_idx == app.selected_line;
 
-            let mut style = Style::default();
+            let color_idx = commit_color_map.get(blame_line.full_commit_id.as_str()).copied().unwrap_or(0);
+            let commit_color = COMMIT_COLORS[color_idx % COMMIT_COLORS.len()];
+
+            let mut base_style = Style::default().fg(commit_color);
             if is_selected {
-                style = style.bg(Color::DarkGray);
+                base_style = base_style.bg(Color::DarkGray);
             }
 
             let line_content = vec![
-                Span::styled(format!("{:4} ", blame_line.line_num), style.fg(Color::DarkGray)),
-                Span::styled(format!("{} ", blame_line.commit_sha), style.fg(Color::Yellow)),
-                Span::styled(format!("{:20} ", blame_line.author), style.fg(Color::Green)),
-                Span::styled(format!("{:16} ", blame_line.date), style.fg(Color::Blue)),
-                Span::styled(&blame_line.content, style),
+                Span::styled(format!("{:4} ", blame_line.line_num), base_style.fg(Color::DarkGray)),
+                Span::styled(format!("{} ", blame_line.commit_sha), base_style),
+                Span::styled(format!("{:20} ", blame_line.author), base_style),
+                Span::styled(format!("{:16} ", blame_line.date), base_style),
+                Span::styled(&blame_line.content, base_style),
             ];
             ListItem::new(Line::from(line_content))
         })
