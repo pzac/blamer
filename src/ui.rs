@@ -68,12 +68,14 @@ pub fn ui(f: &mut Frame, app: &App) {
                 base_style = base_style.bg(Color::DarkGray);
             }
 
+            let initials = author_initials(&blame_line.author);
+            let summary = truncate(&blame_line.summary, 30);
             let content_style = if is_selected { Style::default().bg(Color::DarkGray) } else { Style::default() };
             let line_content = vec![
                 Span::styled(format!("{:4} ", blame_line.line_num), base_style.fg(Color::DarkGray)),
-                Span::styled(format!("{} ", blame_line.commit_sha), base_style),
-                Span::styled(format!("{:20} ", blame_line.author), base_style),
-                Span::styled(format!("{:16} ", blame_line.date), base_style),
+                Span::styled(format!("{:3} ", initials), base_style),
+                Span::styled(format!("{:10} ", blame_line.date), base_style),
+                Span::styled(format!("{:30} ", summary), base_style),
                 Span::styled(&blame_line.content, content_style),
             ];
             ListItem::new(Line::from(line_content))
@@ -171,4 +173,22 @@ fn render_commit_popup(f: &mut Frame, details: &CommitDetails) {
         .alignment(Alignment::Left);
 
     f.render_widget(popup, popup_area);
+}
+
+fn author_initials(name: &str) -> String {
+    name.split_whitespace()
+        .filter_map(|w| w.chars().next())
+        .map(|c| c.to_uppercase().next().unwrap_or(c))
+        .take(3)
+        .collect()
+}
+
+fn truncate(s: &str, max_chars: usize) -> String {
+    let mut chars = s.chars();
+    let truncated: String = chars.by_ref().take(max_chars).collect();
+    if chars.next().is_some() {
+        format!("{}…", &truncated[..truncated.len().min(max_chars - 1)])
+    } else {
+        truncated
+    }
 }
