@@ -68,12 +68,13 @@ pub fn ui(f: &mut Frame, app: &App) {
                 base_style = base_style.bg(Color::DarkGray);
             }
 
+            let content_style = if is_selected { Style::default().bg(Color::DarkGray) } else { Style::default() };
             let line_content = vec![
                 Span::styled(format!("{:4} ", blame_line.line_num), base_style.fg(Color::DarkGray)),
                 Span::styled(format!("{} ", blame_line.commit_sha), base_style),
                 Span::styled(format!("{:20} ", blame_line.author), base_style),
                 Span::styled(format!("{:16} ", blame_line.date), base_style),
-                Span::styled(&blame_line.content, base_style),
+                Span::styled(&blame_line.content, content_style),
             ];
             ListItem::new(Line::from(line_content))
         })
