@@ -40,6 +40,7 @@ struct CommitDetails {
     author_email: String,
     date: String,
     message: String,
+    github_url: Option<String>,
 }
 
 struct App {
@@ -126,14 +127,56 @@ impl App {
             .map(|dt| dt.format("%Y-%m-%d %H:%M:%S %z").to_string())
             .unwrap_or_else(|| "Unknown date".to_string());
 
+        let github_url = get_github_commit_url(&repo, &line.full_commit_id);
+
         Some(CommitDetails {
             sha: line.full_commit_id.clone(),
             author: author.name().unwrap_or("Unknown").to_string(),
             author_email: author.email().unwrap_or("unknown@email").to_string(),
             date: datetime,
             message: commit.message().unwrap_or("No message").to_string(),
+            github_url,
         })
     }
+}
+
+fn parse_github_base_url(remote_url: &str) -> Option<String> {
+    // HTTPS: https://github.com/owner/repo.git or https://github.com/owner/repo
+    if let Some(path) = remote_url.strip_prefix("https://github.com/") {
+        let repo_path = path.trim_end_matches(".git");
+        return Some(format!("https://github.com/{}", repo_path));
+    }
+    // SSH: git@github.com:owner/repo.git or git@github.com:owner/repo
+    if let Some(path) = remote_url.strip_prefix("git@github.com:") {
+        let repo_path = path.trim_end_matches(".git");
+        return Some(format!("https://github.com/{}", repo_path));
+    }
+    None
+}
+
+fn get_github_commit_url(repo: &Repository, sha: &str) -> Option<String> {
+    let remotes = repo.remotes().ok()?;
+    for remote_name in remotes.iter().flatten() {
+        if let Ok(remote) = repo.find_remote(remote_name) {
+            if let Some(url) = remote.url() {
+                if let Some(base) = parse_github_base_url(url) {
+                    return Some(format!("{}/commit/{}", base, sha));
+                }
+            }
+        }
+    }
+    None
+}
+
+fn open_url(url: &str) {
+    #[cfg(target_os = "macos")]
+    let _ = std::process::Command::new("open").arg(url).spawn();
+
+    #[cfg(target_os = "linux")]
+    let _ = std::process::Command::new("xdg-open").arg(url).spawn();
+
+    #[cfg(target_os = "windows")]
+    let _ = std::process::Command::new("cmd").args(["/c", "start", url]).spawn();
 }
 
 fn get_blame_info(repo: &Repository, file_path: &Path) -> Result<Vec<BlameLine>, Box<dyn std::error::Error>> {
@@ -314,9 +357,23 @@ fn render_commit_popup(f: &mut Frame, details: &CommitDetails) {
     ];
 
     content.extend(message_lines);
+
+    if let Some(url) = &details.github_url {
+        content.push(Line::from(""));
+        content.push(Line::from(vec![
+            Span::styled("GitHub: ", Style::default().add_modifier(Modifier::BOLD)),
+            Span::styled(url.as_str(), Style::default().fg(Color::Cyan)),
+        ]));
+    }
+
     content.push(Line::from(""));
+    let hint = if details.github_url.is_some() {
+        "Space/Esc: close | o: open in GitHub"
+    } else {
+        "Press Space or Esc to close"
+    };
     content.push(Line::from(Span::styled(
-        "Press Space or Esc to close",
+        hint,
         Style::default().fg(Color::Gray).add_modifier(Modifier::ITALIC),
     )));
 
@@ -347,6 +404,13 @@ fn run_app<B: ratatui::backend::Backend>(
                     KeyCode::Char(' ') | KeyCode::Esc => {
                         app.show_commit_details = false;
                         app.commit_details = None;
+                    }
+                    KeyCode::Char('o') => {
+                        if let Some(details) = &app.commit_details {
+                            if let Some(url) = &details.github_url {
+                                open_url(url);
+                            }
+                        }
                     }
                     _ => {}
                 }
