@@ -1,5 +1,12 @@
 use git2::Repository;
-use crate::git::{BlameLine, CommitDetails, get_github_commit_url};
+use crate::git::{BlameLine, CommitDetails, get_blame_info_at_commit, get_github_commit_url};
+
+pub struct HistoryEntry {
+    lines: Vec<BlameLine>,
+    selected_line: usize,
+    scroll_offset: usize,
+    current_commit_label: Option<String>,
+}
 
 pub struct App {
     pub lines: Vec<BlameLine>,
@@ -9,10 +16,13 @@ pub struct App {
     pub show_commit_details: bool,
     pub commit_details: Option<CommitDetails>,
     pub repo_path: std::path::PathBuf,
+    pub relative_file_path: std::path::PathBuf,
+    pub history_stack: Vec<HistoryEntry>,
+    pub current_commit_label: Option<String>,
 }
 
 impl App {
-    pub fn new(filename: String, lines: Vec<BlameLine>, repo_path: std::path::PathBuf) -> Self {
+    pub fn new(filename: String, lines: Vec<BlameLine>, repo_path: std::path::PathBuf, relative_file_path: std::path::PathBuf) -> Self {
         Self {
             lines,
             scroll_offset: 0,
@@ -21,6 +31,9 @@ impl App {
             show_commit_details: false,
             commit_details: None,
             repo_path,
+            relative_file_path,
+            history_stack: Vec::new(),
+            current_commit_label: None,
         }
     }
 
@@ -62,6 +75,45 @@ impl App {
                 self.show_commit_details = true;
             }
         }
+    }
+
+    pub fn go_back_in_history(&mut self) {
+        let full_id = self.lines[self.selected_line].full_commit_id.clone();
+        if full_id == "0".repeat(40) { return; }
+
+        let repo = match Repository::open(&self.repo_path) { Ok(r) => r, Err(_) => return };
+        let oid = match git2::Oid::from_str(&full_id) { Ok(o) => o, Err(_) => return };
+        let commit = match repo.find_commit(oid) { Ok(c) => c, Err(_) => return };
+        if commit.parent_count() == 0 { return; }
+        let parent_id = match commit.parent_id(0) { Ok(id) => id, Err(_) => return };
+
+        let new_lines = match get_blame_info_at_commit(&repo, &self.relative_file_path, parent_id) {
+            Ok(l) => l,
+            Err(_) => return,
+        };
+
+        self.history_stack.push(HistoryEntry {
+            lines: std::mem::replace(&mut self.lines, new_lines),
+            selected_line: self.selected_line,
+            scroll_offset: self.scroll_offset,
+            current_commit_label: self.current_commit_label.take(),
+        });
+
+        self.selected_line = 0;
+        self.scroll_offset = 0;
+        self.current_commit_label = Some(format!("{:.8}", parent_id));
+        self.show_commit_details = false;
+        self.commit_details = None;
+    }
+
+    pub fn go_forward_in_history(&mut self) {
+        let entry = match self.history_stack.pop() { Some(e) => e, None => return };
+        self.lines = entry.lines;
+        self.selected_line = entry.selected_line;
+        self.scroll_offset = entry.scroll_offset;
+        self.current_commit_label = entry.current_commit_label;
+        self.show_commit_details = false;
+        self.commit_details = None;
     }
 
     fn load_commit_details(&self) -> Option<CommitDetails> {

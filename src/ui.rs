@@ -19,7 +19,11 @@ pub fn ui(f: &mut Frame, app: &App) {
         .split(f.area());
 
     // Header
-    let header = Paragraph::new(format!("Git Blame: {}", app.filename))
+    let header_text = match &app.current_commit_label {
+        Some(label) => format!("Git Blame: {} @ {}", app.filename, label),
+        None => format!("Git Blame: {}", app.filename),
+    };
+    let header = Paragraph::new(header_text)
         .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
         .block(Block::default().borders(Borders::ALL));
     f.render_widget(header, chunks[0]);
@@ -57,7 +61,7 @@ pub fn ui(f: &mut Frame, app: &App) {
 
     // Footer
     let footer_text = format!(
-        "Lines {}-{}/{} | ↑/↓: scroll | Space: commit details | q: quit",
+        "Lines {}-{}/{} | ↑/↓: scroll | ←/→: history | Space: commit details | q: quit",
         app.scroll_offset + 1,
         end_idx,
         app.lines.len()

@@ -76,6 +76,8 @@ fn run_app<B: ratatui::backend::Backend>(
                         app.scroll_offset = app.lines.len().saturating_sub(1);
                     }
                     KeyCode::Char(' ') => app.toggle_commit_details(),
+                    KeyCode::Left => app.go_back_in_history(),
+                    KeyCode::Right => app.go_forward_in_history(),
                     _ => {}
                 }
             }
@@ -112,6 +114,15 @@ fn main() {
         }
     };
 
+    let workdir = match repo.workdir() {
+        Some(w) => w,
+        None => { eprintln!("Error: Bare repositories are not supported"); process::exit(1); }
+    };
+    let relative_file_path = match abs_path.strip_prefix(workdir) {
+        Ok(p) => p.to_path_buf(),
+        Err(e) => { eprintln!("Error: {}", e); process::exit(1); }
+    };
+
     let blame_lines = match get_blame_info(&repo, &abs_path) {
         Ok(lines) => lines,
         Err(e) => {
@@ -128,7 +139,7 @@ fn main() {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    let app = App::new(cli.filename.clone(), blame_lines, repo_path);
+    let app = App::new(cli.filename.clone(), blame_lines, repo_path, relative_file_path);
     let res = run_app(&mut terminal, app);
 
     disable_raw_mode().unwrap();
