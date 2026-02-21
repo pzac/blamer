@@ -6,3 +6,6 @@ edition = "2024"
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
 git2 = "0.19"
+ratatui = "0.29"
+crossterm = "0.28"
+chrono = "0.4"
