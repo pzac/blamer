@@ -109,8 +109,8 @@ impl App {
             current_commit_label: self.current_commit_label.take(),
         });
 
-        self.selected_line = 0;
-        self.scroll_offset = 0;
+        self.selected_line = self.selected_line.min(self.lines.len().saturating_sub(1));
+        self.scroll_offset = self.scroll_offset.min(self.lines.len().saturating_sub(1)).min(self.selected_line);
         self.current_commit_label = Some(format!("{:.8} · {} · {}", parent_id, parent_date, parent_title));
         self.show_commit_details = false;
         self.commit_details = None;
