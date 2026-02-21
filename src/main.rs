@@ -45,7 +45,15 @@ fn run_app<B: ratatui::backend::Backend>(
         terminal.draw(|f| ui(f, &app))?;
 
         if let Event::Key(key) = event::read()? {
-            if app.show_commit_details {
+            if app.show_commit_list {
+                match key.code {
+                    KeyCode::Esc | KeyCode::Char('l') | KeyCode::Char('q') => app.show_commit_list = false,
+                    KeyCode::Up | KeyCode::Char('k') => app.commit_list_up(),
+                    KeyCode::Down | KeyCode::Char('j') => app.commit_list_down(),
+                    KeyCode::Enter => app.jump_to_commit_list_entry(),
+                    _ => {}
+                }
+            } else if app.show_commit_details {
                 match key.code {
                     KeyCode::Char(' ') | KeyCode::Esc => {
                         app.show_commit_details = false;
@@ -78,6 +86,7 @@ fn run_app<B: ratatui::backend::Backend>(
                     KeyCode::Char(' ') => app.toggle_commit_details(),
                     KeyCode::Left => app.go_back_in_history(),
                     KeyCode::Right => app.go_forward_in_history(),
+                    KeyCode::Char('l') => app.toggle_commit_list(),
                     _ => {}
                 }
             }

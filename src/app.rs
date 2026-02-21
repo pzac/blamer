@@ -1,5 +1,5 @@
 use git2::Repository;
-use crate::git::{BlameLine, CommitDetails, get_blame_info_at_commit, get_github_commit_url};
+use crate::git::{BlameLine, CommitDetails, FileCommit, get_blame_info_at_commit, get_file_commits, get_github_commit_url};
 
 pub struct HistoryEntry {
     lines: Vec<BlameLine>,
@@ -19,6 +19,9 @@ pub struct App {
     pub relative_file_path: std::path::PathBuf,
     pub history_stack: Vec<HistoryEntry>,
     pub current_commit_label: Option<String>,
+    pub show_commit_list: bool,
+    pub commit_list: Vec<FileCommit>,
+    pub commit_list_selected: usize,
 }
 
 impl App {
@@ -34,6 +37,9 @@ impl App {
             relative_file_path,
             history_stack: Vec::new(),
             current_commit_label: None,
+            show_commit_list: false,
+            commit_list: Vec::new(),
+            commit_list_selected: 0,
         }
     }
 
@@ -124,6 +130,62 @@ impl App {
         self.current_commit_label = entry.current_commit_label;
         self.show_commit_details = false;
         self.commit_details = None;
+    }
+
+    pub fn toggle_commit_list(&mut self) {
+        if self.show_commit_list {
+            self.show_commit_list = false;
+            return;
+        }
+        let repo = match Repository::open(&self.repo_path) { Ok(r) => r, Err(_) => return };
+        if let Ok(commits) = get_file_commits(&repo, &self.relative_file_path) {
+            self.commit_list = commits;
+            self.commit_list_selected = 0;
+            self.show_commit_list = true;
+        }
+    }
+
+    pub fn commit_list_up(&mut self) {
+        if self.commit_list_selected > 0 {
+            self.commit_list_selected -= 1;
+        }
+    }
+
+    pub fn commit_list_down(&mut self) {
+        if self.commit_list_selected + 1 < self.commit_list.len() {
+            self.commit_list_selected += 1;
+        }
+    }
+
+    pub fn jump_to_commit_list_entry(&mut self) {
+        let entry = match self.commit_list.get(self.commit_list_selected) {
+            Some(e) => e,
+            None => return,
+        };
+        let oid_str = entry.oid.clone();
+        let label = format!("{} · {} · {}", entry.short_id, entry.date, entry.summary);
+
+        let repo = match Repository::open(&self.repo_path) { Ok(r) => r, Err(_) => return };
+        let oid = match git2::Oid::from_str(&oid_str) { Ok(o) => o, Err(_) => return };
+
+        let new_lines = match get_blame_info_at_commit(&repo, &self.relative_file_path, oid) {
+            Ok(l) => l,
+            Err(_) => return,
+        };
+
+        self.history_stack.push(HistoryEntry {
+            lines: std::mem::replace(&mut self.lines, new_lines),
+            selected_line: self.selected_line,
+            scroll_offset: self.scroll_offset,
+            current_commit_label: self.current_commit_label.take(),
+        });
+
+        self.selected_line = self.selected_line.min(self.lines.len().saturating_sub(1));
+        self.scroll_offset = self.scroll_offset.min(self.lines.len().saturating_sub(1)).min(self.selected_line);
+        self.current_commit_label = Some(label);
+        self.show_commit_details = false;
+        self.commit_details = None;
+        self.show_commit_list = false;
     }
 
     fn load_commit_details(&self) -> Option<CommitDetails> {

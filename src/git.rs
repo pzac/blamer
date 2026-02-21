@@ -110,6 +110,56 @@ pub fn get_blame_info_at_commit(
     Ok(lines)
 }
 
+pub struct FileCommit {
+    pub oid: String,
+    pub short_id: String,
+    pub author: String,
+    pub date: String,
+    pub summary: String,
+}
+
+pub fn get_file_commits(repo: &Repository, relative_path: &Path) -> Result<Vec<FileCommit>, Box<dyn std::error::Error>> {
+    let mut revwalk = repo.revwalk()?;
+    revwalk.push_head()?;
+    revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)?;
+
+    let mut commits = Vec::new();
+    let path_str = relative_path.to_str().unwrap_or("");
+
+    for oid_result in revwalk {
+        let oid = oid_result?;
+        let commit = repo.find_commit(oid)?;
+        let commit_tree = commit.tree()?;
+
+        let touches_file = if commit.parent_count() == 0 {
+            commit_tree.get_path(relative_path).is_ok()
+        } else {
+            let parent_tree = commit.parent(0)?.tree()?;
+            let mut diff_opts = git2::DiffOptions::new();
+            diff_opts.pathspec(path_str);
+            let diff = repo.diff_tree_to_tree(Some(&parent_tree), Some(&commit_tree), Some(&mut diff_opts))?;
+            diff.deltas().count() > 0
+        };
+
+        if touches_file {
+            let author = commit.author().name().unwrap_or("Unknown").to_string();
+            let date = chrono::DateTime::from_timestamp(commit.time().seconds(), 0)
+                .map(|dt| dt.format("%Y-%m-%d").to_string())
+                .unwrap_or_else(|| "Unknown".to_string());
+            let summary = commit.message().unwrap_or("").lines().next().unwrap_or("").to_string();
+            commits.push(FileCommit {
+                oid: oid.to_string(),
+                short_id: format!("{:.8}", oid),
+                author,
+                date,
+                summary,
+            });
+        }
+    }
+
+    Ok(commits)
+}
+
 pub fn get_github_commit_url(repo: &Repository, sha: &str) -> Option<String> {
     let remotes = repo.remotes().ok()?;
     for remote_name in remotes.iter().flatten() {

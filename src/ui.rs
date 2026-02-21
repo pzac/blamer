@@ -88,7 +88,7 @@ pub fn ui(f: &mut Frame, app: &App) {
 
     // Footer
     let footer_text = format!(
-        "Lines {}-{}/{} | ↑/↓: scroll | ←/→: history | Space: commit details | q: quit",
+        "Lines {}-{}/{} | ↑/↓: scroll | ←/→: history | l: file log | Space: commit details | q: quit",
         app.scroll_offset + 1,
         end_idx,
         app.lines.len()
@@ -103,6 +103,11 @@ pub fn ui(f: &mut Frame, app: &App) {
         if let Some(details) = &app.commit_details {
             render_commit_popup(f, details);
         }
+    }
+
+    // File commit list popup
+    if app.show_commit_list {
+        render_commit_list_popup(f, app);
     }
 }
 
@@ -173,6 +178,50 @@ fn render_commit_popup(f: &mut Frame, details: &CommitDetails) {
         .alignment(Alignment::Left);
 
     f.render_widget(popup, popup_area);
+}
+
+fn render_commit_list_popup(f: &mut Frame, app: &crate::app::App) {
+    let area = f.area();
+    let popup_width = area.width.saturating_sub(10).min(110);
+    let popup_height = area.height.saturating_sub(6).min(40);
+
+    let popup_area = Rect {
+        x: (area.width.saturating_sub(popup_width)) / 2,
+        y: (area.height.saturating_sub(popup_height)) / 2,
+        width: popup_width,
+        height: popup_height,
+    };
+
+    f.render_widget(Clear, popup_area);
+
+    let visible_height = popup_height.saturating_sub(2) as usize; // minus borders
+    let scroll = app.commit_list_selected
+        .saturating_sub(visible_height / 2)
+        .min(app.commit_list.len().saturating_sub(visible_height));
+    let end_idx = (scroll + visible_height).min(app.commit_list.len());
+
+    let items: Vec<ListItem> = app.commit_list[scroll..end_idx]
+        .iter()
+        .enumerate()
+        .map(|(idx, entry)| {
+            let is_selected = scroll + idx == app.commit_list_selected;
+            let bg = if is_selected { Style::default().bg(Color::DarkGray) } else { Style::default() };
+            ListItem::new(Line::from(vec![
+                Span::styled(format!("{} ", entry.short_id), bg.fg(Color::Yellow)),
+                Span::styled(format!("{} ", entry.date), bg.fg(Color::Blue)),
+                Span::styled(format!("{:3} ", author_initials(&entry.author)), bg.fg(Color::Green)),
+                Span::styled(&entry.summary, bg),
+            ]))
+        })
+        .collect();
+
+    let list = List::new(items).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(format!(" File History ({} commits) | ↑/↓: navigate | Enter: jump | Esc: close ", app.commit_list.len()))
+            .style(Style::default().bg(Color::Black)),
+    );
+    f.render_widget(list, popup_area);
 }
 
 fn author_initials(name: &str) -> String {
