@@ -86,6 +86,16 @@ impl App {
         let commit = match repo.find_commit(oid) { Ok(c) => c, Err(_) => return };
         if commit.parent_count() == 0 { return; }
         let parent_id = match commit.parent_id(0) { Ok(id) => id, Err(_) => return };
+        let parent_commit = match repo.find_commit(parent_id) { Ok(c) => c, Err(_) => return };
+        let parent_date = chrono::DateTime::from_timestamp(parent_commit.time().seconds(), 0)
+            .map(|dt| dt.format("%Y-%m-%d").to_string())
+            .unwrap_or_else(|| "Unknown".to_string());
+        let parent_title = parent_commit.message()
+            .unwrap_or("")
+            .lines()
+            .next()
+            .unwrap_or("")
+            .to_string();
 
         let new_lines = match get_blame_info_at_commit(&repo, &self.relative_file_path, parent_id) {
             Ok(l) => l,
@@ -101,7 +111,7 @@ impl App {
 
         self.selected_line = 0;
         self.scroll_offset = 0;
-        self.current_commit_label = Some(format!("{:.8}", parent_id));
+        self.current_commit_label = Some(format!("{:.8} · {} · {}", parent_id, parent_date, parent_title));
         self.show_commit_details = false;
         self.commit_details = None;
     }
