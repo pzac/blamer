@@ -20,6 +20,7 @@ use ui::ui;
 
 #[derive(Parser)]
 #[command(name = "blamer")]
+#[command(version)]
 #[command(about = "A TUI for viewing git blame information", long_about = None)]
 struct Cli {
     /// Path to the file
