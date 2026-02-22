@@ -1,6 +1,8 @@
 # Blamer
 
-This is a CLI application to help you investigate the history of a file, following its git history.
+A CLI application to help you investigate the history of a file, following its git history.
+
+When you run `git blame` on a file, maybe interested in a specific line, you often stumble on changes that are not interesting, such as whitespace updates or autoformatting, and you want to jump to the previous update. It's a common operation, but annoying to do on the command line (or via Github's "previous changes" links). This tool gives you a quick way to do it locally.
 
 It's been built with extensive LLM help.
 
