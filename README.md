@@ -20,6 +20,17 @@ The binary will be at `target/release/blamer`. You can copy it somewhere on your
 cp target/release/blamer ~/.local/bin/
 ```
 
+### Homebrew
+
+If you prefer homebrew:
+
+```
+brew tap pzac/tap
+brew install blamer
+```
+
+Formula is not a cask, it will compile the package and requires rust.
+
 ## Usage
 
 ```sh
