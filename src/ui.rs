@@ -33,8 +33,10 @@ pub fn ui(f: &mut Frame, app: &App) {
         .split(f.area());
 
     // Header
+    let depth = app.history_stack.len();
     let header_text = match &app.current_commit_label {
-        Some(label) => format!("Git Blame: {} @ {}", app.filename, label),
+        Some(label) => format!("Git Blame: {} @ {} [{} steps back]", app.filename, label, depth),
+        None if depth > 0 => format!("Git Blame: {} [{} steps back]", app.filename, depth),
         None => format!("Git Blame: {}", app.filename),
     };
     let header = Paragraph::new(header_text)
