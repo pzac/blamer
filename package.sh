@@ -8,7 +8,7 @@ if [ -z "$1" ]; then
 fi
 
 TAG="$1"
-ARCHIVE="${TAG}.tar.gz"
+ARCHIVE="blamer-${TAG}.tar.gz"
 
 tar czf "$ARCHIVE" \
   --exclude="./.git" \
