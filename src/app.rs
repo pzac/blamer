@@ -6,6 +6,7 @@ pub struct HistoryEntry {
     selected_line: usize,
     scroll_offset: usize,
     current_commit_label: Option<String>,
+    current_view_commit_id: Option<String>,
 }
 
 pub struct App {
@@ -22,6 +23,7 @@ pub struct App {
     pub show_commit_list: bool,
     pub commit_list: Vec<FileCommit>,
     pub commit_list_selected: usize,
+    pub current_view_commit_id: Option<String>,
 }
 
 impl App {
@@ -40,6 +42,7 @@ impl App {
             show_commit_list: false,
             commit_list: Vec::new(),
             commit_list_selected: 0,
+            current_view_commit_id: None,
         }
     }
 
@@ -90,20 +93,32 @@ impl App {
         let repo = match Repository::open(&self.repo_path) { Ok(r) => r, Err(_) => return };
         let oid = match git2::Oid::from_str(&full_id) { Ok(o) => o, Err(_) => return };
         let commit = match repo.find_commit(oid) { Ok(c) => c, Err(_) => return };
-        if commit.parent_count() == 0 { return; }
-        let parent_id = match commit.parent_id(0) { Ok(id) => id, Err(_) => return };
-        let parent_commit = match repo.find_commit(parent_id) { Ok(c) => c, Err(_) => return };
-        let parent_date = chrono::DateTime::from_timestamp(parent_commit.time().seconds(), 0)
+
+        // Resolve the current view's newest commit ID
+        let view_commit_id = match &self.current_view_commit_id {
+            Some(id) => id.clone(),
+            None => match repo.head().and_then(|h| h.peel_to_commit()) {
+                Ok(c) => c.id().to_string(),
+                Err(_) => return,
+            },
+        };
+
+        // If the selected line's commit IS the current view's commit: go to parent (previous change)
+        // Otherwise: jump to the selected line's commit (show the version of the file at that commit)
+        let target_oid = if full_id == view_commit_id {
+            if commit.parent_count() == 0 { return; }
+            match commit.parent_id(0) { Ok(id) => id, Err(_) => return }
+        } else {
+            oid
+        };
+
+        let target_commit = match repo.find_commit(target_oid) { Ok(c) => c, Err(_) => return };
+        let target_date = chrono::DateTime::from_timestamp(target_commit.time().seconds(), 0)
             .map(|dt| dt.format("%Y-%m-%d").to_string())
             .unwrap_or_else(|| "Unknown".to_string());
-        let parent_title = parent_commit.message()
-            .unwrap_or("")
-            .lines()
-            .next()
-            .unwrap_or("")
-            .to_string();
+        let target_title = target_commit.message().unwrap_or("").lines().next().unwrap_or("").to_string();
 
-        let new_lines = match get_blame_info_at_commit(&repo, &self.relative_file_path, parent_id) {
+        let new_lines = match get_blame_info_at_commit(&repo, &self.relative_file_path, target_oid) {
             Ok(l) => l,
             Err(_) => return,
         };
@@ -113,11 +128,13 @@ impl App {
             selected_line: self.selected_line,
             scroll_offset: self.scroll_offset,
             current_commit_label: self.current_commit_label.take(),
+            current_view_commit_id: self.current_view_commit_id.take(),
         });
 
         self.selected_line = self.selected_line.min(self.lines.len().saturating_sub(1));
         self.scroll_offset = self.scroll_offset.min(self.lines.len().saturating_sub(1)).min(self.selected_line);
-        self.current_commit_label = Some(format!("{:.8} · {} · {}", parent_id, parent_date, parent_title));
+        self.current_commit_label = Some(format!("{:.8} · {} · {}", target_oid, target_date, target_title));
+        self.current_view_commit_id = Some(target_oid.to_string());
         self.show_commit_details = false;
         self.commit_details = None;
     }
@@ -128,6 +145,7 @@ impl App {
         self.selected_line = entry.selected_line;
         self.scroll_offset = entry.scroll_offset;
         self.current_commit_label = entry.current_commit_label;
+        self.current_view_commit_id = entry.current_view_commit_id;
         self.show_commit_details = false;
         self.commit_details = None;
     }
@@ -178,11 +196,13 @@ impl App {
             selected_line: self.selected_line,
             scroll_offset: self.scroll_offset,
             current_commit_label: self.current_commit_label.take(),
+            current_view_commit_id: self.current_view_commit_id.take(),
         });
 
         self.selected_line = self.selected_line.min(self.lines.len().saturating_sub(1));
         self.scroll_offset = self.scroll_offset.min(self.lines.len().saturating_sub(1)).min(self.selected_line);
         self.current_commit_label = Some(label);
+        self.current_view_commit_id = Some(oid_str.clone());
         self.show_commit_details = false;
         self.commit_details = None;
         self.show_commit_list = false;
