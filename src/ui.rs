@@ -61,18 +61,29 @@ pub fn ui(f: &mut Frame, app: &App) {
         .map(|(idx, blame_line)| {
             let actual_line_idx = app.scroll_offset + idx;
             let is_selected = actual_line_idx == app.selected_line;
+            let is_current_commit = app.current_view_commit_id.as_deref()
+                .map_or(false, |id| id == blame_line.full_commit_id.as_str());
 
             let color_idx = commit_color_map.get(blame_line.full_commit_id.as_str()).copied().unwrap_or(0);
             let commit_color = COMMIT_COLORS[color_idx % COMMIT_COLORS.len()];
 
             let mut base_style = Style::default().fg(commit_color);
+            if is_current_commit {
+                base_style = base_style.bg(Color::Indexed(237)).add_modifier(Modifier::BOLD);
+            }
             if is_selected {
                 base_style = base_style.bg(Color::DarkGray);
             }
 
             let initials = author_initials(&blame_line.author);
             let summary = truncate(&blame_line.summary, 30);
-            let content_style = if is_selected { Style::default().bg(Color::DarkGray) } else { Style::default() };
+            let content_style = if is_selected {
+                Style::default().bg(Color::DarkGray)
+            } else if is_current_commit {
+                Style::default().bg(Color::Indexed(237))
+            } else {
+                Style::default()
+            };
             let line_content = vec![
                 Span::styled(format!("{:4} ", blame_line.line_num), base_style.fg(Color::DarkGray)),
                 Span::styled(format!("{:3} ", initials), base_style),
