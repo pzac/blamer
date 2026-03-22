@@ -4,7 +4,7 @@ mod ui;
 
 use clap::Parser;
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -46,6 +46,9 @@ fn run_app<B: ratatui::backend::Backend>(
         terminal.draw(|f| ui(f, &app))?;
 
         if let Event::Key(key) = event::read()? {
+            // visible_height = terminal height - 6 (header+footer) - 2 (content borders)
+            let visible_height = terminal.size()?.height.saturating_sub(8) as usize;
+
             if app.show_commit_list {
                 match key.code {
                     KeyCode::Esc | KeyCode::Char('l') | KeyCode::Char('q') => app.show_commit_list = false,
@@ -70,10 +73,13 @@ fn run_app<B: ratatui::backend::Backend>(
                     _ => {}
                 }
             } else {
+                let shift = key.modifiers.contains(KeyModifiers::SHIFT);
                 match key.code {
                     KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
-                    KeyCode::Down | KeyCode::Char('j') => app.scroll_down(),
-                    KeyCode::Up | KeyCode::Char('k') => app.scroll_up(),
+                    KeyCode::Down | KeyCode::Char('j') if shift => app.scroll_viewport_down(visible_height),
+                    KeyCode::Up | KeyCode::Char('k') if shift => app.scroll_viewport_up(visible_height),
+                    KeyCode::Down | KeyCode::Char('j') => app.scroll_down(visible_height),
+                    KeyCode::Up | KeyCode::Char('k') => app.scroll_up(visible_height),
                     KeyCode::PageDown => app.page_down(20),
                     KeyCode::PageUp => app.page_up(20),
                     KeyCode::Home => {

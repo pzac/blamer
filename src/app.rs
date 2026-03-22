@@ -46,20 +46,40 @@ impl App {
         }
     }
 
-    pub fn scroll_down(&mut self) {
+    pub fn scroll_down(&mut self, visible_height: usize) {
         if self.selected_line < self.lines.len().saturating_sub(1) {
             self.selected_line += 1;
-            if self.selected_line >= self.scroll_offset + 20 {
-                self.scroll_offset = self.selected_line.saturating_sub(19);
+            if self.selected_line >= self.scroll_offset + visible_height {
+                self.scroll_offset = self.selected_line + 1 - visible_height;
             }
         }
     }
 
-    pub fn scroll_up(&mut self) {
+    pub fn scroll_up(&mut self, _visible_height: usize) {
         if self.selected_line > 0 {
             self.selected_line -= 1;
             if self.selected_line < self.scroll_offset {
                 self.scroll_offset = self.selected_line;
+            }
+        }
+    }
+
+    pub fn scroll_viewport_down(&mut self, _visible_height: usize) {
+        let max_offset = self.lines.len().saturating_sub(1);
+        if self.scroll_offset < max_offset {
+            self.scroll_offset += 1;
+            if self.selected_line < self.scroll_offset {
+                self.selected_line = self.scroll_offset;
+            }
+        }
+    }
+
+    pub fn scroll_viewport_up(&mut self, visible_height: usize) {
+        if self.scroll_offset > 0 {
+            self.scroll_offset -= 1;
+            let bottom = self.scroll_offset + visible_height - 1;
+            if self.selected_line > bottom {
+                self.selected_line = bottom;
             }
         }
     }
