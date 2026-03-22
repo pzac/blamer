@@ -91,7 +91,14 @@ pub fn ui(f: &mut Frame, app: &App) {
                 Span::styled(format!("{:30} ", summary), base_style),
                 Span::styled(&blame_line.content, content_style),
             ];
-            ListItem::new(Line::from(line_content))
+            let item_style = if is_selected {
+                Style::default().bg(Color::DarkGray)
+            } else if is_current_commit {
+                Style::default().bg(Color::Indexed(237))
+            } else {
+                Style::default()
+            };
+            ListItem::new(Line::from(line_content)).style(item_style)
         })
         .collect();
 
